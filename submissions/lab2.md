@@ -19,7 +19,7 @@ docker run --rm `
 | Severity | Count |
 |----------|---------:|
 | Critical | 0 |
-| High | 0 |
+| High | 7 |
 | Elevated | 4 |
 | Medium | 14 | 
 | Low | 5 |
