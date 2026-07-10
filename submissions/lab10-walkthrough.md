@@ -2,40 +2,40 @@
 
 ## (0:00–0:30) Context
 
-I built an end-to-end DevSecOps program around the Juice Shop application for a course project. The pipeline covers every phase: commit signing, software composition analysis, static and dynamic testing, infrastructure-as-code scanning, container signing, runtime monitoring, and a single vulnerability-management dashboard. DefectDojo ties everything together with a unified SLA matrix.
+I built a DevSecOps program around OWASP Juice Shop as the target application. The scope covers the full pipeline: source code, container image, infrastructure as code, Kubernetes manifests, and runtime behavior. The goal was not to run tools for their own sake, but to aggregate every finding into a single vulnerability program with SLAs and metrics.
 
 ## (0:30–2:00) Layers
 
-- **Commit** — every commit is SSH-signed, and a `gitleaks` pre-commit hook prevents secrets from entering history.
-- **Build** — `syft` generates a CycloneDX SBOM, `grype` scans dependencies for CVEs, and `semgrep` runs SAST.
-- **Pre-deploy** — `checkov` and `KICS` scan Terraform, Ansible, and Pulumi; `cosign` signs images; and a Conftest/Rego gate enforces pod security standards in CI.
-- **Runtime** — `Falco` with modern eBPF detects container drift, unexpected writes to `/tmp`, and outbound connections to known mining-pool ports.
-- **Program** — `DefectDojo` ingests the Grype, Trivy, Semgrep, ZAP, and Nuclei reports from Labs 4–5, deduplicates the same CVE across tools, and tracks remediation against SLAs.
+The pipeline has five layers.
 
-## (2:00–3:00) Findings + Closures
+1. **Build artifacts:** Syft generates an SBOM, Grype scans it for CVEs, and Cosign signs the resulting image so we can verify provenance before deployment.
+2. **Static analysis:** Semgrep runs SAST on the source code in CI, catching injection patterns and hardcoded secrets.
+3. **Dynamic and infrastructure analysis:** OWASP ZAP performs DAST, Nuclei checks network exposure, and Checkov/KICS scan Terraform, Ansible, and Pulumi for cloud misconfigurations.
+4. **Runtime:** Falco with the eBPF driver detects anomalous behavior inside the container, such as terminal shells, sensitive-file reads, and suspicious outbound connections.
+5. **Program layer:** DefectDojo imports all scan outputs, deduplicates across tools, applies the SLA matrix, and produces the backlog, MTTR, and SLA-compliance metrics I report to stakeholders.
 
-- Five raw scan reports consolidated into 265 findings, deduplicated down to 234 unique items.
-- **Strongest correlated finding:** a SQL-injection sink in `routes/login.ts` flagged by both Semgrep (static) and ZAP (dynamic). Static analysis showed where the vulnerability lived; dynamic analysis proved it was reachable.
-- No risk-accepted findings yet; any future acceptance will carry an explicit expiry date.
+## (2:00–3:00) Findings and Closures
+
+We imported 359 raw findings across seven scan types. After deduplication, the active backlog is 287 unique findings. The most urgent are 12 Critical CVEs, mostly in authentication and cryptography libraries like `jsonwebtoken` and `crypto-js`. One deduplication example is CVE-2023-46233 in `crypto-js`, which was flagged by Grype, Trivy Lab 4, and Trivy Lab 7 image scan, but counted as a single finding in DefectDojo. No findings have been risk-accepted yet; I avoid silent program killers by requiring an explicit expiry date on any accepted risk.
 
 ## (3:00–4:00) Metrics
 
-- **MTTD:** near zero days (findings imported immediately after scans).
-- **MTTR:** not yet measurable because no findings were closed at initial import.
-- **Vulnerability age:** zero days at baseline.
-- **SLA compliance:** 100% at baseline.
-- **Backlog trend:** 234 active findings, remediation starts next quarter.
+- **Active backlog:** 287 unique findings
+- **Severity split:** 12 Critical, 112 High, 103 Medium, 48 Low, 12 Info
+- **SLA compliance:** 100% at baseline because nothing has aged yet
+- **MTTR:** not available until the first finding is closed
+- **DORA benchmark:** Elite teams remediate Critical vulnerabilities in less than one day; our 24-hour Critical SLA targets that bar
 
 ## (4:00–4:30) Next Steps
 
-If I had another quarter, I would mature **OWASP SAMM → Defect Management** by ingesting Falco runtime alerts into DefectDojo. This would give runtime detections the same SLA and MTTR tracking as scan-time findings, closing the last gap in the loop.
+If I had another quarter, I would add a Falco-to-DefectDojo parser so runtime alerts enter the same SLA and MTTR clock as scan-time findings. This directly advances the OWASP SAMM **Defect Management** practice from ad-hoc tracking to measured, managed triage.
 
 ## (4:30–5:00) Q&A Anticipation
 
-**Q: "How would you handle a Log4Shell-style 0-day?"**
+**Q1: "How would you handle a Log4Shell-style zero-day?"**
 
-Because every image has a signed CycloneDX SBOM, I would query the SBOM by component name and version to get an exact list of affected services in minutes, then drive remediation through the existing SLA clock. The SBOM turns an incident from a scavenger hunt into a query.
+I would start with the SBOM. Instead of grepping repositories, I would query the SBOM for `log4j-core` versions and immediately know which images and deployments are affected. Then I would trigger emergency scans with Trivy/Grype, import the results into DefectDojo as a new engagement, and prioritize patches using the 24-hour Critical SLA.
 
-**Q: "Why open-source tools instead of paid IAST or SAST?"**
+**Q2: "Why open-source tools instead of paid?"**
 
-The open-source stack covers SCA, SAST, IaC, signing, runtime, and aggregation with no license cost and full CI portability. That is the right foundation for establishing program discipline. Paid tools add lower false-positive rates and deeper dataflow, but they make sense after the SLA and MTTR baseline exist, not before.
+Open-source tools cover the fundamentals — SAST, SCA, DAST, IaC scanning, runtime detection — and produce portable JSON output. For a learning project and a small team, they are enough to build the pipeline and demonstrate value. Paid tools make sense when scale or integration depth exceeds what the open-source stack can maintain, but the process and metrics are the same.
